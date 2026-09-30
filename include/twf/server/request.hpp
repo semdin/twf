@@ -1,6 +1,7 @@
 #pragma once
 
 #include "twf/core/types.hpp"
+#include "twf/shared/serializer.hpp"
 #include <algorithm>
 #include <cctype>
 #include <optional>
@@ -81,6 +82,12 @@ public:
             start = end + 1;
         }
         return std::nullopt;
+    }
+
+    /// Parse request body JSON directly into strongly-typed C++ struct
+    template <typename T>
+    Result<T> json() const {
+        return from_json<T>(body);
     }
 };
 

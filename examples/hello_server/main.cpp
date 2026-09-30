@@ -1,13 +1,34 @@
 #include "twf/server/server.hpp"
+#include "twf/shared/models.hpp"
 #include <iostream>
 #include <format>
+#include <mutex>
+#include <vector>
+
+// Status structure for reflection
+struct StatusInfo {
+    std::string framework{"twf"};
+    std::string standard{"C++23"};
+    std::string serializer{"Glaze (Compile-Time Reflection)"};
+    std::string status{"running"};
+};
 
 int main() {
     twf::Server app;
 
-    // Route: Root "/" returning a modern dark-mode welcome page
+    // In-memory thread-safe state
+    std::mutex state_mutex;
+    std::vector<twf::TodoItem> todos = {
+        {1, "Learn Modern C++23 Features", true},
+        {2, "Build twf Full-Stack Architecture", true},
+        {3, "Automatic JSON Reflection with Glaze", true},
+        {4, "Compile C++ to WebAssembly (Frontend)", false}
+    };
+    int next_id = 5;
+
+    // Route: Root "/" returning an interactive dark-mode dashboard
     app.get("/", [](const twf::Request&) {
-        return twf::Response::html(R"(<!DOCTYPE html>
+        return twf::Response::html(R"html(<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -23,14 +44,16 @@ int main() {
             align-items: center;
             justify-content: center;
             min-height: 100vh;
+            padding: 2rem;
         }
         .container {
-            background: rgba(255, 255, 255, 0.04);
+            background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(16px);
             padding: 2.5rem;
             border-radius: 16px;
-            max-width: 600px;
+            width: 100%;
+            max-width: 650px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
         }
         .badge {
@@ -52,73 +75,155 @@ int main() {
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        p { color: #94a3b8; line-height: 1.6; margin-bottom: 1.5rem; }
-        .endpoints {
+        p { color: #94a3b8; line-height: 1.6; margin-bottom: 1.5rem; font-size: 0.95rem; }
+        .section-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+        }
+        .todo-box {
             background: #050608;
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 8px;
             padding: 1rem;
+            margin-bottom: 1.5rem;
         }
-        .endpoint {
+        .todo-list { list-style: none; margin-bottom: 1rem; }
+        .todo-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.5rem 0;
+            padding: 0.6rem 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
-        .endpoint:last-child { border-bottom: none; }
-        .method {
-            font-family: monospace;
-            background: #10b981;
-            color: #000;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 0.8rem;
+        .todo-item:last-child { border-bottom: none; }
+        .todo-title { font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+        .done { text-decoration: line-through; color: #64748b; }
+        .form-row { display: flex; gap: 8px; }
+        input[type="text"] {
+            flex: 1;
+            padding: 8px 12px;
+            background: #11141d;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #fff;
+            outline: none;
+            font-size: 0.9rem;
         }
-        a {
-            color: #38bdf8;
-            text-decoration: none;
-            font-family: monospace;
+        input[type="text"]:focus { border-color: #38bdf8; }
+        button {
+            padding: 8px 16px;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
         }
-        a:hover { text-decoration: underline; }
+        button:hover { background: #1d4ed8; }
+        .api-links {
+            display: flex;
+            gap: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .api-links a { color: #38bdf8; text-decoration: none; }
+        .api-links a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="badge">twf &bull; The Web Framework</div>
-        <h1>Welcome to twf (C++23)</h1>
-        <p>A full-stack, zero-copy, modern C++ web framework running natively on your server.</p>
+        <div class="badge">twf &bull; Step 3 Isomorphic Reflection</div>
+        <h1>twf (C++23) Live State</h1>
+        <p>This page communicates directly with the C++23 backend using automatic JSON reflection.</p>
         
-        <div class="endpoints">
-            <div class="endpoint">
-                <span class="method">GET</span>
-                <a href="/api/status">/api/status</a>
-                <span style="color:#64748b; font-size:0.8rem">JSON Status</span>
-            </div>
-            <div class="endpoint">
-                <span class="method">GET</span>
-                <a href="/api/greet?name=Mehmet">/api/greet?name=Mehmet</a>
-                <span style="color:#64748b; font-size:0.8rem">Query Params</span>
+        <div class="section-title">Shared C++ Todo Models</div>
+        <div class="todo-box">
+            <ul class="todo-list" id="todos">Loading from C++ server...</ul>
+            <div class="form-row">
+                <input type="text" id="newTitle" placeholder="Enter new todo...">
+                <button onclick="addTodo()">Add via POST</button>
             </div>
         </div>
+
+        <div class="section-title">Raw REST Endpoints</div>
+        <div class="api-links">
+            <a href="/api/status" target="_blank">/api/status (JSON reflection)</a>
+            <a href="/api/todos" target="_blank">/api/todos (C++ struct vector)</a>
+        </div>
     </div>
+
+    <script>
+        async function fetchTodos() {
+            const res = await fetch('/api/todos');
+            const data = await res.json();
+            const list = document.getElementById('todos');
+            list.innerHTML = '';
+            data.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'todo-item';
+                li.innerHTML = `
+                    <span class="todo-title ${item.completed ? 'done' : ''}">
+                        ${item.completed ? '&#x2714;' : '&#x25CB;'} ${item.title}
+                    </span>
+                    <span style="font-size:0.75rem; color:#64748b">ID: ${item.id}</span>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        async function addTodo() {
+            const input = document.getElementById('newTitle');
+            const title = input.value.trim();
+            if (!title) return;
+
+            await fetch('/api/todos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title })
+            });
+
+            input.value = '';
+            fetchTodos();
+        }
+
+        fetchTodos();
+    </script>
 </body>
-</html>)");
+</html>)html");
     });
 
-    // Route: JSON API status
+    // Route: GET /api/status - directly serializes a C++ StatusInfo struct
     app.get("/api/status", [](const twf::Request&) {
-        return twf::Response::json(R"({"framework":"twf","standard":"C++23","status":"running","speed":"nanoseconds"})");
+        StatusInfo info;
+        return twf::Response::json(info);
     });
 
-    // Route: Dynamic greeting using query string parameter
-    app.get("/api/greet", [](const twf::Request& req) {
-        auto name = req.get_query("name").value_or("World");
-        return twf::Response::json(std::format(R"({{"message":"Hello, {}! Welcome to twf."}})", name));
+    // Route: GET /api/todos - directly serializes a std::vector<twf::TodoItem>
+    app.get("/api/todos", [&todos, &state_mutex](const twf::Request&) {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        return twf::Response::json(todos);
     });
 
-    std::cout << "[twf] Starting server on port 8080...\n";
+    // Route: POST /api/todos - parses JSON body directly into twf::CreateTodoDto
+    app.post("/api/todos", [&todos, &next_id, &state_mutex](const twf::Request& req) {
+        auto dto = req.json<twf::CreateTodoDto>();
+        if (!dto) {
+            return twf::Response::text("Invalid JSON payload: " + dto.error().message, twf::StatusCode::BadRequest);
+        }
+
+        std::lock_guard<std::mutex> lock(state_mutex);
+        twf::TodoItem item{next_id++, dto->title, false};
+        todos.push_back(item);
+
+        return twf::Response::json(item, twf::StatusCode::Created);
+    });
+
+    std::cout << "[twf] Starting server on port 8080 with C++23 Reflection...\n";
     auto result = app.listen("127.0.0.1", 8080);
     if (!result) {
         std::cerr << std::format("[twf Error] {}\n", result.error().message);

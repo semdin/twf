@@ -16,6 +16,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         -Wextra
         -Wpedantic
         -Wno-unused-parameter
+        -Wno-c++26-extensions
     )
 endif()
 

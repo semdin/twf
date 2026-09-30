@@ -1,9 +1,12 @@
 #pragma once
 
 #include "twf/core/types.hpp"
+#include "twf/shared/serializer.hpp"
+#include <concepts>
 #include <format>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace twf {
@@ -53,12 +56,23 @@ public:
         return res;
     }
 
-    /// Factory for JSON response
+    /// Factory for raw JSON response string
     static Response json(std::string_view json_str, StatusCode code = StatusCode::OK) {
         Response res(code);
         res.header("Content-Type", "application/json; charset=utf-8");
         res.body(std::string(json_str));
         return res;
+    }
+
+    /// Factory for serializing any C++ object directly to JSON response using reflection
+    template <typename T>
+        requires (!std::is_convertible_v<T, std::string_view> && !std::is_convertible_v<T, std::string>)
+    static Response json(const T& value, StatusCode code = StatusCode::OK) {
+        auto json_str = to_json(value);
+        if (!json_str) {
+            return Response::text("Serialization error: " + json_str.error().message, StatusCode::InternalServerError);
+        }
+        return Response::json(*json_str, code);
     }
 
     /// Accessors
