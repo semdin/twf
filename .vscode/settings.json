@@ -1,0 +1,16 @@
+{
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.generator": "Ninja",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build",
+        "--background-index",
+        "--header-insertion=iwyu"
+    ],
+    "files.associations": {
+        "*.hpp": "cpp",
+        "*.cpp": "cpp",
+        "expected": "cpp",
+        "format": "cpp",
+        "span": "cpp"
+    }
+}
