@@ -20,24 +20,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     )
 endif()
 
-# Automated CPM (CMake Package Manager) Setup
-set(CPM_DOWNLOAD_VERSION 0.40.2)
-if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM_${CPM_DOWNLOAD_VERSION}.cmake")
-    message(STATUS "Downloading CPM.cmake v${CPM_DOWNLOAD_VERSION}...")
-    file(DOWNLOAD
-        "https://github.com/cpm-cmake/CPM.cmake/releases/download/v${CPM_DOWNLOAD_VERSION}/CPM.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM_${CPM_DOWNLOAD_VERSION}.cmake"
-        STATUS download_status
-    )
-    list(GET download_status 0 status_code)
-    if(NOT status_code EQUAL 0)
-        message(WARNING "Could not download CPM.cmake. Local packages will be used if available.")
-    endif()
-endif()
-if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM_${CPM_DOWNLOAD_VERSION}.cmake")
-    include("${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM_${CPM_DOWNLOAD_VERSION}.cmake")
-endif()
-
 # -------------------------------------------------------------
 # Core Framework Library: twf
 # -------------------------------------------------------------
@@ -108,19 +90,16 @@ install(FILES
 )
 
 # -------------------------------------------------------------
-# Optional Third-Party: Glaze (High-speed C++23 JSON reflection)
+# Third-Party: Glaze (High-speed C++23 JSON reflection)
 # -------------------------------------------------------------
-if(COMMAND CPMAddPackage)
-    CPMAddPackage(
-        NAME glaze
-        GITHUB_REPOSITORY stephenberry/glaze
-        GIT_TAG v4.3.0
-        OPTIONS "glaze_ENABLE_AVX2 OFF"
-    )
-    if(TARGET glaze::glaze)
-        target_link_libraries(twf PUBLIC glaze::glaze)
-    endif()
-endif()
+include(FetchContent)
+FetchContent_Declare(
+    glaze
+    GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+    GIT_TAG v4.3.0
+)
+FetchContent_MakeAvailable(glaze)
+target_link_libraries(twf PUBLIC glaze::glaze)
 
 # -------------------------------------------------------------
 # Examples & Applications (Only when built as root project)
