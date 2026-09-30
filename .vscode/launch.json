@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb-dap",
+            "request": "launch",
+            "name": "Debug: hello_server",
+            "program": "${workspaceFolder}/build/examples/hello_server/hello_server.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "preLaunchTask": "cmake build (debug)"
+        },
+        {
+            "type": "lldb-dap",
+            "request": "attach",
+            "name": "Attach: çalışan hello_server",
+            "program": "${workspaceFolder}/build/examples/hello_server/hello_server.exe"
+        }
+    ]
+}
