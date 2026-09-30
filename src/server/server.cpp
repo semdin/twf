@@ -17,6 +17,7 @@
     #include <winsock2.h>
     #include <ws2tcpip.h>
     using socket_t = SOCKET;
+    using socklen_t = int;
     constexpr socket_t INVALID_SOCK = INVALID_SOCKET;
     constexpr int SOCK_ERR = SOCKET_ERROR;
     #define CLOSE_SOCK(s) closesocket(s)
@@ -216,7 +217,7 @@ Result<void> Server::listen(std::string_view host, int port) {
     // Accept loop
     while (pimpl_->is_running.load()) {
         sockaddr_in client_addr{};
-        int client_len = sizeof(client_addr);
+        socklen_t client_len = sizeof(client_addr);
         socket_t client_sock = accept(pimpl_->listen_socket, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
 
         if (client_sock == INVALID_SOCK) {
@@ -235,7 +236,23 @@ Result<void> Server::listen(std::string_view host, int port) {
 
                 auto opt_req = parse_http_request(recv_buf);
                 if (opt_req) {
-                    const Request& req = *opt_req;
+                    Request req = std::move(*opt_req);
+
+                    // Read remaining body bytes if needed (reverse proxies like Caddy send body in chunks)
+                    auto cl_header = req.get_header("content-length");
+                    if (cl_header) {
+                        size_t expected_len = 0;
+                        try {
+                            expected_len = std::stoull(std::string(*cl_header));
+                        } catch (...) {}
+
+                        while (req.body.size() < expected_len) {
+                            int more = recv(client_sock, temp, sizeof(temp), 0);
+                            if (more <= 0) break;
+                            req.body.append(temp, more);
+                        }
+                    }
+
                     std::string key = Impl::make_route_key(req.method, req.path);
 
                     Response res;

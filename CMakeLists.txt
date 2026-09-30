@@ -72,13 +72,13 @@ if(COMMAND CPMAddPackage)
 endif()
 
 # -------------------------------------------------------------
-# Examples & Applications
+# Examples & Applications (Only when built as root project)
 # -------------------------------------------------------------
-add_subdirectory(examples/hello_server)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    add_subdirectory(examples/hello_server)
 
-# -------------------------------------------------------------
-# Test Suite
-# -------------------------------------------------------------
-enable_testing()
-add_subdirectory(tests)
+    # Test Suite
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
