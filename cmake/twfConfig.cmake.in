@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Include generated targets
+include("${CMAKE_CURRENT_LIST_DIR}/twfTargets.cmake")
+
+check_required_components(twf)
