@@ -75,3 +75,10 @@ endif()
 # Examples & Applications
 # -------------------------------------------------------------
 add_subdirectory(examples/hello_server)
+
+# -------------------------------------------------------------
+# Test Suite
+# -------------------------------------------------------------
+enable_testing()
+add_subdirectory(tests)
+

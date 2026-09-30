@@ -4,6 +4,7 @@
 #include "twf/shared/serializer.hpp"
 #include <concepts>
 #include <format>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -73,6 +74,24 @@ public:
             return Response::text("Serialization error: " + json_str.error().message, StatusCode::InternalServerError);
         }
         return Response::json(*json_str, code);
+    }
+
+    /// Factory for serving file content from disk
+    static Response file(std::string_view filepath, std::string_view content_type = "application/octet-stream") {
+        std::ifstream f(std::string(filepath), std::ios::binary | std::ios::ate);
+        if (!f.is_open()) {
+            return Response::text("File Not Found: " + std::string(filepath), StatusCode::NotFound);
+        }
+        std::streamsize size = f.tellg();
+        f.seekg(0, std::ios::beg);
+        std::string buffer(static_cast<size_t>(size), '\0');
+        if (f.read(buffer.data(), size) || size == 0) {
+            Response res(StatusCode::OK);
+            res.header("Content-Type", std::string(content_type));
+            res.body(std::move(buffer));
+            return res;
+        }
+        return Response::text("Error reading file", StatusCode::InternalServerError);
     }
 
     /// Accessors

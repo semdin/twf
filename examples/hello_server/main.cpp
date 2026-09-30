@@ -155,8 +155,13 @@ int main() {
             <a href="/api/status" target="_blank">/api/status (JSON reflection)</a>
             <a href="/api/todos" target="_blank">/api/todos (C++ struct vector)</a>
         </div>
+
+        <!-- WebAssembly C++ Frontend Mount Point -->
+        <div id="wasm-mount-point"></div>
     </div>
 
+    <!-- Load compiled C++ WebAssembly Module -->
+    <script src="/wasm_client.js"></script>
     <script>
         async function fetchTodos() {
             const res = await fetch('/api/todos');
@@ -221,6 +226,15 @@ int main() {
         todos.push_back(item);
 
         return twf::Response::json(item, twf::StatusCode::Created);
+    });
+
+    // Serve WebAssembly Frontend Client Assets
+    app.get("/wasm_client.js", [](const twf::Request&) {
+        return twf::Response::file("examples/wasm_client/wasm_client.js", "application/javascript");
+    });
+
+    app.get("/wasm_client.wasm", [](const twf::Request&) {
+        return twf::Response::file("examples/wasm_client/wasm_client.wasm", "application/wasm");
     });
 
     std::cout << "[twf] Starting server on port 8080 with C++23 Reflection...\n";
