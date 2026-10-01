@@ -8,6 +8,8 @@
 #include <vector>
 #include <sstream>
 #include <charconv>
+#include <filesystem>
+#include <cctype>
 
 #ifdef _WIN32
     #ifndef WIN32_LEAN_AND_MEAN
@@ -117,12 +119,40 @@ std::optional<Request> parse_http_request(const Buffer& buf) {
     return req;
 }
 
+std::string_view get_mime_type(const std::filesystem::path& file_path) {
+    auto ext = file_path.extension().string();
+    for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    if (ext == ".html" || ext == ".htm") return "text/html; charset=utf-8";
+    if (ext == ".css") return "text/css; charset=utf-8";
+    if (ext == ".js" || ext == ".mjs") return "application/javascript; charset=utf-8";
+    if (ext == ".json") return "application/json; charset=utf-8";
+    if (ext == ".wasm") return "application/wasm";
+    if (ext == ".png") return "image/png";
+    if (ext == ".jpg" || ext == ".jpeg") return "image/jpeg";
+    if (ext == ".gif") return "image/gif";
+    if (ext == ".svg") return "image/svg+xml";
+    if (ext == ".ico") return "image/x-icon";
+    if (ext == ".txt") return "text/plain; charset=utf-8";
+    if (ext == ".xml") return "application/xml; charset=utf-8";
+    if (ext == ".pdf") return "application/pdf";
+    if (ext == ".mp4") return "video/mp4";
+    if (ext == ".webm") return "video/webm";
+    return "application/octet-stream";
+}
+
 } // anonymous namespace
 
 struct Server::Impl {
+    struct StaticMount {
+        std::string mount_prefix;
+        std::string directory_path;
+    };
+
     socket_t listen_socket{INVALID_SOCK};
     std::atomic<bool> is_running{false};
     std::unordered_map<std::string, Handler> routes;
+    std::vector<StaticMount> static_mounts;
     Handler not_found_handler{[](const Request& req) {
         return Response::html(
             std::format("<!DOCTYPE html><html><body style='font-family:system-ui;padding:2rem;background:#111;color:#eee'>"
@@ -132,7 +162,64 @@ struct Server::Impl {
     }};
 
     static std::string make_route_key(Method method, std::string_view path) {
-        return std::format("{}|{}", method_to_string(method), path);
+        std::string p(path);
+        if (p.empty() || p.front() != '/') p.insert(p.begin(), '/');
+        while (p.size() > 1 && p.back() == '/') p.pop_back();
+        return std::format("{}|{}", method_to_string(method), p);
+    }
+
+    std::optional<Response> try_serve_static(const Request& req) const {
+        if (req.method != Method::GET && req.method != Method::HEAD) {
+            return std::nullopt;
+        }
+
+        for (const auto& mount : static_mounts) {
+            const std::string& prefix = mount.mount_prefix;
+            std::string_view req_path = req.path;
+
+            bool matches = false;
+            std::string_view rel_subpath;
+
+            if (prefix == "/") {
+                matches = true;
+                rel_subpath = req_path;
+                if (!rel_subpath.empty() && rel_subpath.front() == '/') {
+                    rel_subpath.remove_prefix(1);
+                }
+            } else if (req_path == prefix) {
+                matches = true;
+                rel_subpath = "";
+            } else if (req_path.starts_with(prefix) && req_path.size() > prefix.size() && req_path[prefix.size()] == '/') {
+                matches = true;
+                rel_subpath = req_path.substr(prefix.size() + 1);
+            }
+
+            if (!matches) continue;
+
+            std::error_code ec;
+            std::filesystem::path base = std::filesystem::weakly_canonical(mount.directory_path, ec);
+            if (ec || !std::filesystem::exists(base, ec)) continue;
+
+            std::filesystem::path target = std::filesystem::weakly_canonical(base / rel_subpath, ec);
+            if (ec) continue;
+
+            // Directory traversal prevention
+            auto [root_end, _] = std::mismatch(base.begin(), base.end(), target.begin());
+            if (root_end != base.end()) {
+                return Response::text("Forbidden: directory traversal detected", StatusCode::Forbidden);
+            }
+
+            if (std::filesystem::is_directory(target, ec)) {
+                target /= "index.html";
+            }
+
+            if (std::filesystem::is_regular_file(target, ec)) {
+                auto mime = get_mime_type(target);
+                return Response::file(target.string(), mime);
+            }
+        }
+
+        return std::nullopt;
     }
 };
 
@@ -159,6 +246,26 @@ bool Server::is_running() const noexcept {
 
 Server& Server::route(Method method, std::string_view path, Handler handler) {
     pimpl_->routes[Impl::make_route_key(method, path)] = std::move(handler);
+    return *this;
+}
+
+Server& Server::use(std::string_view prefix, const Router& router) {
+    for (const auto& entry : router.routes()) {
+        std::string joined = join_paths(prefix, entry.path);
+        route(entry.method, joined, entry.handler);
+    }
+    return *this;
+}
+
+Server& Server::use(const Router& router) {
+    return use("", router);
+}
+
+Server& Server::serve_static(std::string_view mount_prefix, std::string_view directory_path) {
+    std::string prefix(mount_prefix);
+    if (prefix.empty() || prefix.front() != '/') prefix.insert(prefix.begin(), '/');
+    while (prefix.size() > 1 && prefix.back() == '/') prefix.pop_back();
+    pimpl_->static_mounts.push_back(Impl::StaticMount{std::move(prefix), std::string(directory_path)});
     return *this;
 }
 
@@ -260,7 +367,12 @@ Result<void> Server::listen(std::string_view host, int port) {
                     if (it != pimpl_->routes.end()) {
                         res = it->second(req);
                     } else {
-                        res = pimpl_->not_found_handler(req);
+                        auto static_res = pimpl_->try_serve_static(req);
+                        if (static_res) {
+                            res = std::move(*static_res);
+                        } else {
+                            res = pimpl_->not_found_handler(req);
+                        }
                     }
 
                     std::string wire_data = res.serialize();

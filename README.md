@@ -51,23 +51,23 @@ Open your browser at **`http://localhost:8080/`**.
 int main() {
     twf::Server app;
 
-    // HTML route
-    app.get("/", [](const twf::Request&) {
-        return twf::Response::html("<h1>Hello from twf (C++23)!</h1>");
-    });
-
-    // JSON API route
-    app.get("/api/status", [](const twf::Request&) {
+    // 1. Modular Sub-Router (e.g. for /api/v1)
+    twf::Router api_router;
+    api_router.get("/status", [](const twf::Request&) {
         return twf::Response::json(R"({"status":"ok","framework":"twf"})");
     });
-
-    // Query parameters (/greet?name=Mehmet)
-    app.get("/greet", [](const twf::Request& req) {
+    api_router.get("/greet", [](const twf::Request& req) {
         auto name = req.get_query("name").value_or("World");
         return twf::Response::text("Hello, " + name + "!");
     });
 
-    // Start listening on port 8080
+    // Mount sub-router under "/api"
+    app.use("/api", api_router);
+
+    // 2. Serve static assets (HTML/CSS/JS/WASM)
+    app.serve_static("/", "./public");
+
+    // 3. Start listening on port 8080
     app.listen("127.0.0.1", 8080);
     return 0;
 }

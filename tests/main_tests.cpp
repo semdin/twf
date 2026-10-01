@@ -4,6 +4,8 @@
 #include "twf/shared/models.hpp"
 #include "twf/server/request.hpp"
 #include "twf/server/response.hpp"
+#include "twf/server/router.hpp"
+#include "twf/server/server.hpp"
 #include "twf/client/dom.hpp"
 
 #include <iostream>
@@ -153,6 +155,50 @@ void test_dom_builder() {
     g_tests_passed++;
 }
 
+// Test 6: Router & Modular Sub-Routing
+void test_router() {
+    // 1. Path joining
+    ASSERT_EQ(twf::join_paths("/api", "/todos"), "/api/todos", "join_paths basic");
+    ASSERT_EQ(twf::join_paths("/api/", "/todos"), "/api/todos", "join_paths trailing slash prefix");
+    ASSERT_EQ(twf::join_paths("api", "todos"), "/api/todos", "join_paths missing slashes");
+    ASSERT_EQ(twf::join_paths("/", "todos"), "/todos", "join_paths root prefix");
+    ASSERT_EQ(twf::join_paths("/api", ""), "/api", "join_paths empty path");
+    ASSERT_EQ(twf::join_paths("", "/todos"), "/todos", "join_paths empty prefix");
+
+    // 2. Sub-router chaining
+    twf::Router todo_router;
+    todo_router.get("/items", [](const twf::Request&) {
+        return twf::Response::text("list items");
+    });
+    todo_router.post("/items", [](const twf::Request&) {
+        return twf::Response::text("item created", twf::StatusCode::Created);
+    });
+
+    ASSERT_EQ(todo_router.routes().size(), 2ULL, "todo_router should have 2 routes");
+    ASSERT_EQ(todo_router.routes()[0].path, "/items", "First route path");
+    ASSERT_EQ(todo_router.routes()[1].path, "/items", "Second route path");
+
+    // 3. Mount under parent router
+    twf::Router api_v1;
+    api_v1.use("/v1", todo_router);
+
+    ASSERT_EQ(api_v1.routes().size(), 2ULL, "api_v1 should have 2 mounted routes");
+    ASSERT_EQ(api_v1.routes()[0].path, "/v1/items", "Mounted GET path");
+    ASSERT_EQ(api_v1.routes()[1].path, "/v1/items", "Mounted POST path");
+
+    // Test handler execution
+    twf::Request dummy_req;
+    auto res = api_v1.routes()[0].handler(dummy_req);
+    ASSERT_EQ(res.get_body(), "list items", "Handler execution must work");
+
+    // 4. Mount into Server
+    twf::Server app;
+    app.use("/api", api_v1);
+
+    std::cout << "  [PASS] Router & Modular Sub-Routing (prefix mounting, path join, and dispatch)\n";
+    g_tests_passed++;
+}
+
 int main() {
     std::cout << "\n========================================\n";
     std::cout << "   twf (The Web Framework) Test Suite   \n";
@@ -164,6 +210,7 @@ int main() {
     test_request();
     test_response();
     test_dom_builder();
+    test_router();
 
     std::cout << std::format("\n>>> All {} test suites passed successfully! ({} assertions verified) <<<\n\n", 
         g_tests_passed, g_assertions);

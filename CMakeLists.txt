@@ -25,6 +25,7 @@ endif()
 # -------------------------------------------------------------
 add_library(twf STATIC
     src/core/buffer.cpp
+    src/server/router.cpp
     src/server/server.cpp
 )
 

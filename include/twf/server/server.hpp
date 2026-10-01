@@ -3,6 +3,7 @@
 #include "twf/core/types.hpp"
 #include "twf/server/request.hpp"
 #include "twf/server/response.hpp"
+#include "twf/server/router.hpp"
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -12,8 +13,6 @@
 #include <vector>
 
 namespace twf {
-
-using Handler = std::function<Response(const Request&)>;
 
 /// High-performance HTTP server engine
 class Server {
@@ -46,6 +45,23 @@ public:
     Server& del(std::string_view path, Handler handler) {
         return route(Method::DELETE, path, std::move(handler));
     }
+
+    Server& patch(std::string_view path, Handler handler) {
+        return route(Method::PATCH, path, std::move(handler));
+    }
+
+    Server& options(std::string_view path, Handler handler) {
+        return route(Method::OPTIONS, path, std::move(handler));
+    }
+
+    /// Mount a Router with a path prefix (e.g. app.use("/api/todos", todo_router))
+    Server& use(std::string_view prefix, const Router& router);
+
+    /// Mount a Router at root path
+    Server& use(const Router& router);
+
+    /// Serve static directory mounted at URL prefix (e.g. app.serve_static("/", "./public"))
+    Server& serve_static(std::string_view mount_prefix, std::string_view directory_path);
 
     /// Set fallback 404 handler
     Server& not_found(Handler handler);
